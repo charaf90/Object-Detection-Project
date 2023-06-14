@@ -285,15 +285,15 @@ def get_transform():
         Retourne l'objet transforms
     """
     transformes = transforms.Compose([
-                        #transforms.Resize((128, 128)),
+                        transforms.Resize((64, 64)),
                         #transforms.GaussianBlur(kernel_size=(3, 3), sigma=(0.2, 1.0)),
-                        transforms.Grayscale(num_output_channels=3), 
+                        #transforms.Grayscale(num_output_channels=3), 
                         #transforms.RandomRotation((0,90)),
                         transforms.ToTensor(),
-                        transforms.RandomAffine(degrees=(0, 90), translate=(0.1, 0.2), scale=(0.8, 1.2)),
+                        transforms.RandomVerticalFlip(p=0.5),
                         transforms.RandomHorizontalFlip(p=0.5),
                         #transforms.Normalize(mean=[0.385, 0.356, 0.806], std=[0.229, 0.224, 0.225]),
-                        transforms.Normalize(mean=[0.385, 0.356, 0.306], std=[0.529, 0.524, 0.525]),
+                        transforms.Normalize(mean=[0.45, 0.45, 0.45], std=[0.2, 0.2, 0.2]),
 
                         ])
     return transformes
@@ -331,7 +331,7 @@ def preprocess_image(image_path):
     resized_image = cv2.resize(resized_image, target_size, interpolation=cv2.INTER_AREA)
 
     # Appliquer un filtre Gaussien de taille de kernel 3x3
-    blurred_image = cv2.GaussianBlur(resized_image, (5, 5), 0)
+    blurred_image = cv2.GaussianBlur(resized_image, (3, 3), 0)
     # Appliquer les filtres de Sobel en x et y
     sobel_x = cv2.Sobel(blurred_image, cv2.CV_16S, 1, 0, ksize=3)
     sobel_y = cv2.Sobel(blurred_image, cv2.CV_16S, 0, 1, ksize=3)
@@ -340,7 +340,7 @@ def preprocess_image(image_path):
     # Mettre en valeur les contours des objets en combinant les filtres Sobel
     sobel_x = cv2.convertScaleAbs(sobel_x)
     sobel_y = cv2.convertScaleAbs(sobel_y)
-    enhanced_edges = cv2.addWeighted(sobel_x, 0.5, sobel_y, 0.5, 0)
+    enhanced_edges = cv2.addWeighted(sobel_x, 0.8, sobel_y, 0.8, 0)
 
     # Convertir l'image en objet PIL Image
     preprocessed_image = Image.fromarray(enhanced_edges)
