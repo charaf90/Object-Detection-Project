@@ -4,29 +4,7 @@
 
 Ce projet consiste à mettre en place un système de détection et de classification de véhicules à partir d'images aériennes. Il utilise deux modèles imbriqués, à savoir Detectron2 pour la détection et ResNet50 pour la classification. Le dataset utilisé dans ce projet est le VAID (Vehicle Aerial Imagery Dataset), qui a été préalablement nettoyé et préparé.
 
-## Structure du Projet
 
-Voici la structure générale du projet:
-
-Projet
-'''bash
-├── README.md
-├── preprocessing_classification.py
-├── preprocessing_detectron2.py
-├── resnet50_classification.ipynb
-├── train_detectron2.py
-├── detection_classification_test.ipynb
-├── util.py
-├── data
-│ ├── train
-│ │ ├── anns
-│ │ └── imgs
-│ └── val
-│ ├── anns
-│ └── imgs
-├── bbox_imgs
-└── output
-'''
 ## Étapes du projet
 
 1. **Téléchargement du Dataset**: Commencez par télécharger le dataset nettoyé via ce lien : [Dataset](https://drive.google.com/drive/folders/1-I3qeZNdOT295CjSM2-6UFteI0SjL_pW?usp=drive_link). Une fois téléchargé, placez-le dans un dossier de travail approprié.
@@ -44,3 +22,32 @@ Projet
     - Le modèle de détection est entraîné grâce au script `train_detectron2.py`. Les performances et les poids du modèle seront enregistrés dans le dossier `output`.
 
 4. **Test et visualisation du modèle**: Un notebook Jupyter `detection_classification_test.ipynb` a été créé pour tester le modèle et visualiser les détections. Ce notebook utilise le package FiftyOne pour éval
+
+## Structure du Projet
+
+Voici la structure final du projet:
+
+Projet
+```bash
+├── README.md
+├── preprocessing_classification.py           
+├── preprocessing_detectron2.py
+├── resnet50_classification.ipynb
+├── train_detectron2.py
+├── detection_classification_test.ipynb
+├── util.py
+├── model_final.pth                           #Modele final de détection
+├── vaid_classifier.pth                       #Modele final de classification
+├── data
+│ ├── train
+│ │ ├── anns
+│ │ └── imgs
+│ └── val
+│ ├── anns
+│ └── imgs
+├── bbox_imgs                                 #Véhicules extraits
+├── labels.csv                                #Classe de chaque véhicule
+└── output
+  └── metrics.json                            #Métrics d'évaluation du modèle de detection
+
+```
