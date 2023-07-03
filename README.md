@@ -9,7 +9,7 @@ Ce projet consiste à mettre en place un système de détection et de classifica
 Voici la structure générale du projet:
 
 Projet
-.
+'''bash
 ├── README.md
 ├── preprocessing_classification.py
 ├── preprocessing_detectron2.py
@@ -26,7 +26,7 @@ Projet
 │ └── imgs
 ├── bbox_imgs
 └── output
-
+'''
 ## Étapes du projet
 
 1. **Téléchargement du Dataset**: Commencez par télécharger le dataset nettoyé via ce lien : [Dataset](https://drive.google.com/drive/folders/1-I3qeZNdOT295CjSM2-6UFteI0SjL_pW?usp=drive_link). Une fois téléchargé, placez-le dans un dossier de travail approprié.
