@@ -9,29 +9,23 @@ Ce projet consiste à mettre en place un système de détection et de classifica
 Voici la structure générale du projet:
 
 Projet
-│ README.md
-│ preprocessing_classification.py
-│ preprocessing_detectron2.py
-│ resnet50_classification.ipynb
-│ train_detectron2.py
-│ detection_classification_test.ipynb
-│ util.py
-└───data
-│ │
-│ └───train
-│ │ │
-│ │ └───anns
-│ │ └───imgs
-│ │
-│ └───val
-│ │
-│ └───anns
-│ └───imgs
-│
-└───bbox_imgs
-│
-└───output
-
+.
+├── README.md
+├── preprocessing_classification.py
+├── preprocessing_detectron2.py
+├── resnet50_classification.ipynb
+├── train_detectron2.py
+├── detection_classification_test.ipynb
+├── util.py
+├── data
+│ ├── train
+│ │ ├── anns
+│ │ └── imgs
+│ └── val
+│ ├── anns
+│ └── imgs
+├── bbox_imgs
+└── output
 
 ## Étapes du projet
 
