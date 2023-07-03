@@ -21,7 +21,10 @@ Ce projet consiste à mettre en place un système de détection et de classifica
 
     - Le modèle de détection est entraîné grâce au script `train_detectron2.py`. Les performances et les poids du modèle seront enregistrés dans le dossier `output`.
 
-4. **Test et visualisation du modèle**: Un notebook Jupyter `detection_classification_test.ipynb` a été créé pour tester le modèle et visualiser les détections. Ce notebook utilise le package FiftyOne pour éval
+4. **Test et visualisation du modèle**: Un notebook Jupyter `detection_classification_test.ipynb` a été créé pour tester le modèle et visualiser les détections. Ce notebook utilise le package FiftyOne pour évaluer le modèle sur différentes métriques.
+
+5. **Fichier utilitaire**: Le fichier `util.py` contient toutes les classes et fonctions qui sont utilisées tout au long du projet.
+
 
 ## Structure du Projet
 
@@ -48,6 +51,6 @@ Projet
 ├── bbox_imgs                                 #Véhicules extraits
 ├── labels.csv                                #Classe de chaque véhicule
 └── output
-  └── metrics.json                            #Métrics d'évaluation du modèle de detection
+  └── metrics.json                            #Métriques d'évaluation du modèle de detection
 
 ```
