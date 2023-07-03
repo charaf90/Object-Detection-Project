@@ -286,6 +286,7 @@ def get_transform():
     """
     transformes = transforms.Compose([
                         transforms.Resize((64, 64)),
+                        transforms.RandomAffine(degrees = (0,5), translate = (0.05, 0.1), scale = (0.95, 1.05)), 
                         #transforms.GaussianBlur(kernel_size=(3, 3), sigma=(0.2, 1.0)),
                         #transforms.Grayscale(num_output_channels=3), 
                         #transforms.RandomRotation((0,90)),
@@ -293,10 +294,138 @@ def get_transform():
                         transforms.RandomVerticalFlip(p=0.5),
                         transforms.RandomHorizontalFlip(p=0.5),
                         #transforms.Normalize(mean=[0.385, 0.356, 0.806], std=[0.229, 0.224, 0.225]),
-                        transforms.Normalize(mean=[0.45, 0.45, 0.45], std=[0.2, 0.2, 0.2]),
+                        transforms.Normalize(mean=[0.35, 0.35, 0.35], std=[0.2, 0.2, 0.2]),
 
                         ])
     return transformes
+
+from torch.utils.data import Dataset
+from PIL import Image
+
+from torch.utils.data import Dataset
+from PIL import Image
+import cv2
+import numpy as np
+
+def preprocess_image(image_path):
+    """
+    Effectue le prétraitement de l'image.
+
+    Args:
+        image_path (str): Chemin de l'image à prétraiter.
+
+    Returns:
+        PIL.Image: Image prétraitée.
+    """
+    # Charger l'image en couleur avec OpenCV
+    image = cv2.imread(image_path)
+
+    # Redimensionner l'image en forme carrée sans déformation
+    size = max(image.shape[:2])
+    resized_image = np.zeros((size, size, 3), dtype=np.uint8)  # Ajouter un troisième canal pour la couleur
+    start_h = (size - image.shape[0]) // 2
+    start_w = (size - image.shape[1]) // 2
+    resized_image[start_h:start_h+image.shape[0], start_w:start_w+image.shape[1], :] = image  # Copier tous les canaux
+
+    # Redimensionner l'image à la taille cible
+    target_size = (64, 64)  # Taille cible pour l'image prétraitée
+    resized_image = cv2.resize(resized_image, target_size, interpolation=cv2.INTER_AREA)
+
+    # Convertir l'image en objet PIL Image et convertir l'espace de couleur en RGB
+    preprocessed_image = Image.fromarray(cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB))
+
+    return preprocessed_image
+
+def preprocess_image_detectron(image):
+    """
+    Effectue le prétraitement de l'image.
+
+    Args:
+        image (array): image à prétraiter.
+
+    Returns:
+        PIL.Image: Image prétraitée.
+    """
+
+    # Redimensionner l'image en forme carrée sans déformation
+    size = max(image.shape[:2])
+    resized_image = np.zeros((size, size, 3), dtype=np.uint8)  # Ajouter un troisième canal pour la couleur
+    start_h = (size - image.shape[0]) // 2
+    start_w = (size - image.shape[1]) // 2
+    resized_image[start_h:start_h+image.shape[0], start_w:start_w+image.shape[1], :] = image  # Copier tous les canaux
+
+    # Redimensionner l'image à la taille cible
+    target_size = (64, 64)  # Taille cible pour l'image prétraitée
+    resized_image = cv2.resize(resized_image, target_size, interpolation=cv2.INTER_AREA)
+
+    # Convertir l'image en objet PIL Image et convertir l'espace de couleur en RGB
+    preprocessed_image = Image.fromarray(cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB))
+
+    return preprocessed_image
+
+class VaidVehiculeDataset_test(Dataset):
+    """
+    Dataset personnalisé pour les données de validation des véhicules.
+
+    Args:
+        annotations_file (str): Chemin vers le fichier d'annotations.
+        img_dir (str): Répertoire contenant les images.
+        transformes (callable, optional): Transformations à appliquer aux images.
+
+    Attributes:
+        img_labels (DataFrame): Données d'annotations des images.
+        img_dir (str): Répertoire des images.
+        transform (callable): Transformations à appliquer aux images.
+    """
+
+    def __init__(self, annotations_file, img_dir, transformes=None):
+        """
+        Initialise le dataset de validation des véhicules.
+
+        Args:
+            annotations_file (str): Chemin vers le fichier d'annotations.
+            img_dir (str): Répertoire contenant les images.
+            transformes (callable, optional): Transformations à appliquer aux images.
+        """
+        self.img_labels = pd.read_csv(annotations_file)
+        self.img_dir = img_dir
+        self.transform = transformes
+
+    def __len__(self):
+        """
+        Retourne la taille du dataset (nombre d'images).
+
+        Returns:
+            int: Taille du dataset.
+        """
+        return len(self.img_labels)
+
+    def __getitem__(self, idx):
+        """
+        Récupère un élément du dataset à partir de son index.
+
+        Args:
+            idx (int): Index de l'élément à récupérer.
+
+        Returns:
+            tuple: Tuple contenant l'image et son label correspondant.
+        """
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+
+        img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 0])
+
+        # Prétraitement de l'image en utilisant la fonction indépendante preprocess_image
+        preprocessed_image = preprocess_image(img_path)
+
+        label = self.img_labels.iloc[idx, 1]
+
+        if self.transform:
+            preprocessed_image = self.transform(preprocessed_image)
+
+        return preprocessed_image, label
+
+
 
 
 class VaidVehiculeDataset(Dataset):
@@ -427,7 +556,7 @@ def classification_train(model, train_dl, val_dl, num_classes=7, learning_rate=0
     iteration_list = []  # Liste des itérations
 
     iterations = 0  # Compteur d'itérations
-
+    
     criterion = nn.CrossEntropyLoss()  # Fonction de perte (entropie croisée)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)  # Optimiseur (Adam)
 
@@ -473,6 +602,12 @@ def classification_train(model, train_dl, val_dl, num_classes=7, learning_rate=0
         accuracy_list.append(accuracy)
         iterations += 1
 
+        #Diminution du lr après 30 epochs
+        if epoch == 30:
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = 0.0005
+
+        print(f"Epoch {epoch+1}, Learning Rate: {optimizer.param_groups[0]['lr']}")
         print(f"Epoch {epoch + 1}/{num_epochs}, Accuracy: {accuracy * 100:.2f}%")
 
     # Création d'un DataFrame contenant les résultats d'entraînement
@@ -508,13 +643,13 @@ def prediction(im, classification_model, detection_model, transformes, device):
         x1, y1, x2, y2 = roi.tolist()
         roi = im[int(y1):int(y2), int(x1):int(x2)]
 
-        roi = preprocess_image(roi)
+        roi = preprocess_image_detectron(roi)
 
 
-        roi_image = Image.fromarray(roi)
+        #roi_image = Image.fromarray(roi)
 
         # Application des transformations à la ROI en utilisant torchvision.transforms
-        roi_image_transformed = transformes(roi_image)  # Attention à ce que les transformations correspondent à ceux utiliser pour l'entraînement
+        roi_image_transformed = transformes(roi)  # Attention à ce que les transformations correspondent à ceux utiliser pour l'entraînement
 
         # Conversion de l'image transformée en tenseur
         roi_image_tensor = roi_image_transformed.unsqueeze(0)  # Ajout d'une dimension batch
@@ -529,47 +664,3 @@ def prediction(im, classification_model, detection_model, transformes, device):
     outputs_final.pred_classes = torch.tensor(pred_classes_final)
     return outputs_final
 
-
-def prediction_for_fiftyone(im, classification_model, detection_model, transformes, device):
-    """
-    Effectue une prédiction à l'aide d'un modèle de détection d'objets et d'un modèle de classification.
-
-    Args:
-        im (PIL.Image.Image): Image sur laquelle effectuer la prédiction.
-        classification_model (nn.Module): Modèle de classification utilisé pour classer les régions d'intérêt (ROIs).
-	    detection_model (nn.Module): Modèle de detection utilisé pour detecter les régions d'intérêt (ROIs).
-        transformes (torchvision.transforms):  Transformations des ROIs.
-        device (str) : gpu, cuda, mps or cpu 
-
-    Returns:
-        torch.Tensor: Les sorties finales de la prédiction, contenant les régions d'intérêt (ROIs) et les classes prédites.
-    """
-
-    outputs = detection_model(im) 
-    outputs['instances'] = outputs['instances'][outputs['instances'].scores > 0.4]
-    outputs['instances'] = outputs['instances'][outputs['instances'].pred_classes < 7]
-
-    rois = outputs.pred_boxes.tensor
-
-    pred_classes_final = []
-    for roi in rois:
-        # Extraction de la ROI de l'image
-        x1, y1, x2, y2 = roi.tolist()
-        roi = im[int(y1):int(y2), int(x1):int(x2)]
-        roi_image = Image.fromarray(roi)
-
-        # Application des transformations à la ROI en utilisant torchvision.transforms
-        roi_image_transformed = transformes(roi_image)  # Attention à ce que les transformations correspondent à ceux utiliser pour l'entraînement
-
-        # Conversion de l'image transformée en tenseur
-        roi_image_tensor = roi_image_transformed.unsqueeze(0)  # Ajout d'une dimension batch
-        roi_image_tensor = roi_image_tensor.to(device)
-        
-        # Classification de la ROI avec le modèle de classification
-        classification_output = classification_model(roi_image_tensor)
-        predicted_class = torch.argmax(classification_output)
-        pred_classes_final.append(predicted_class.item())
-
-    # Remplacement de la classe prédite par la classe de classification
-    outputs.pred_classes = torch.tensor(pred_classes_final)
-    return outputs
