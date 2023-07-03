@@ -4,6 +4,13 @@
 
 Ce projet consiste à mettre en place un système de détection et de classification de véhicules à partir d'images aériennes. Il utilise deux modèles imbriqués, à savoir Detectron2 pour la détection et ResNet50 pour la classification. Le dataset utilisé dans ce projet est le VAID (Vehicle Aerial Imagery Dataset), qui a été préalablement nettoyé et préparé.
 
+## Installation
+
+Pour installer les dépendances nécessaires, exécutez la commande suivante :
+
+```bash
+pip install -r requirements.txt
+```
 
 ## Étapes du projet
 
