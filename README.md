@@ -70,3 +70,9 @@ Voici quelques exemples de ce que le modèle est capable de faire :
 
 ![Exemple 2](Exemples/exemple2.png)
 *Un autre exemple de détection et de classification sur une image aérienne*
+
+### Utilisations du modèle avec fiftyone
+
+![Exemple 2](Exemples/gifexemple.gif)
+
+*Exemple avec utilisation de fiftyone*
