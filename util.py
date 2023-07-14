@@ -6,21 +6,30 @@ from detectron2.structures import BoxMode
 from detectron2.config import get_cfg as _get_cfg
 from detectron2 import model_zoo
 import detectron2.utils.comm as comm
+from detectron2.modeling import build_model
+from detectron2.checkpoint import DetectionCheckpointer
+from detectron2.data.detection_utils import read_image
+import detectron2.data.transforms as T
+
 
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 import torch.nn as nn
 from torchvision import datasets, models
 import torch.optim as optim
+from torch.autograd import Function
 
+from torchsummary import summary
 
 
 import torchvision.transforms as transforms
 
 import cv2
 import pandas as pd
+import numpy as np
+
 from PIL import Image
-from tqdm.notebook import tqdm
+
 
 
 def get_cfg(output_dir, learning_rate, batch_size, iterations, checkpoint_period, model, device, nmr_classes):
@@ -299,42 +308,34 @@ def get_transform():
                         ])
     return transformes
 
-from torch.utils.data import Dataset
-from PIL import Image
 
-from torch.utils.data import Dataset
-from PIL import Image
-import cv2
-import numpy as np
-
-def preprocess_image(image_path):
+def get_transform_inference():
     """
-    Effectue le prétraitement de l'image.
+    Applique les transformations nécessaires pour la classification.
+
+    Attention, cette fonction est utilisé pour la classification d'image isolée et également la classifiction des images extraites des détéctections de detectron2.
+    Si vous modifiez ces transformations veuillez entrainement une nouvelle fois le modèle de classification pour que les images des détéctions de detectron2 respecte les paramètres d'entrainement.
 
     Args:
-        image_path (str): Chemin de l'image à prétraiter.
+        None
 
     Returns:
-        PIL.Image: Image prétraitée.
+        Retourne l'objet transforms
     """
-    # Charger l'image en couleur avec OpenCV
-    image = cv2.imread(image_path)
+    transformes = transforms.Compose([
+                        transforms.Resize((64, 64)),
+                        #transforms.RandomAffine(degrees = (0,5), translate = (0.05, 0.1), scale = (0.95, 1.05)), 
+                        #transforms.GaussianBlur(kernel_size=(3, 3), sigma=(0.2, 1.0)),
+                        #transforms.Grayscale(num_output_channels=3), 
+                        #transforms.RandomRotation((0,90)),
+                        transforms.ToTensor(),
+                        #transforms.RandomVerticalFlip(p=0.5),
+                        #transforms.RandomHorizontalFlip(p=0.5),
+                        #transforms.Normalize(mean=[0.385, 0.356, 0.806], std=[0.229, 0.224, 0.225]),
+                        transforms.Normalize(mean=[0.35, 0.35, 0.35], std=[0.2, 0.2, 0.2]),
 
-    # Redimensionner l'image en forme carrée sans déformation
-    size = max(image.shape[:2])
-    resized_image = np.zeros((size, size, 3), dtype=np.uint8)  # Ajouter un troisième canal pour la couleur
-    start_h = (size - image.shape[0]) // 2
-    start_w = (size - image.shape[1]) // 2
-    resized_image[start_h:start_h+image.shape[0], start_w:start_w+image.shape[1], :] = image  # Copier tous les canaux
-
-    # Redimensionner l'image à la taille cible
-    target_size = (64, 64)  # Taille cible pour l'image prétraitée
-    resized_image = cv2.resize(resized_image, target_size, interpolation=cv2.INTER_AREA)
-
-    # Convertir l'image en objet PIL Image et convertir l'espace de couleur en RGB
-    preprocessed_image = Image.fromarray(cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB))
-
-    return preprocessed_image
+                        ])
+    return transformes
 
 def preprocess_image_detectron(image):
     """
@@ -362,6 +363,8 @@ def preprocess_image_detectron(image):
     preprocessed_image = Image.fromarray(cv2.cvtColor(resized_image, cv2.COLOR_BGR2RGB))
 
     return preprocessed_image
+
+
 
 class VaidVehiculeDataset_test(Dataset):
     """
@@ -424,67 +427,6 @@ class VaidVehiculeDataset_test(Dataset):
             preprocessed_image = self.transform(preprocessed_image)
 
         return preprocessed_image, label
-
-
-
-
-class VaidVehiculeDataset(Dataset):
-    """
-    Dataset personnalisé pour les données de validation des véhicules.
-
-    Args:
-        annotations_file (str): Chemin vers le fichier d'annotations.
-        img_dir (str): Répertoire contenant les images.
-        transformes (callable, optional): Transformations à appliquer aux images.
-
-    Attributes:
-        img_labels (DataFrame): Données d'annotations des images.
-        img_dir (str): Répertoire des images.
-        transform (callable): Transformations à appliquer aux images.
-    """
-
-    def __init__(self, annotations_file, img_dir, transformes=None):
-        """
-        Initialise le dataset de validation des véhicules.
-
-        Args:
-            annotations_file (str): Chemin vers le fichier d'annotations.
-            img_dir (str): Répertoire contenant les images.
-            transformes (callable, optional): Transformations à appliquer aux images.
-        """
-        self.img_labels = pd.read_csv(annotations_file)
-        self.img_dir = img_dir
-        self.transform = transformes
-
-    def __len__(self):
-        """
-        Retourne la taille du dataset (nombre d'images).
-
-        Returns:
-            int: Taille du dataset.
-        """
-        return len(self.img_labels)
-
-    def __getitem__(self, idx):
-        """
-        Récupère un élément du dataset à partir de son index.
-
-        Args:
-            idx (int): Index de l'élément à récupérer.
-
-        Returns:
-            tuple: Tuple contenant l'image et son label correspondant.
-        """
-        if torch.is_tensor(idx):
-            idx = idx.tolist()
-
-        img_path = os.path.join(self.img_dir, self.img_labels.iloc[idx, 0])
-        image = Image.open(img_path)
-        label = self.img_labels.iloc[idx, 1]
-        if self.transform:
-            image = self.transform(image)
-
-        return image, label
 
 
 
@@ -616,7 +558,7 @@ def classification_train(model, train_dl, val_dl, num_classes=7, learning_rate=0
 
     return results
 
-def prediction(im, classification_model, detection_model, transformes, device):
+def prediction(im, classification_model, detection_model, transformes, device, confiance = 0.43):
     """
     Effectue une prédiction à l'aide d'un modèle de détection d'objets et d'un modèle de classification.
 
@@ -632,7 +574,7 @@ def prediction(im, classification_model, detection_model, transformes, device):
     """
 
     outputs = detection_model(im) 
-    outputs_pred = outputs['instances'][outputs['instances'].scores > 0.4]
+    outputs_pred = outputs['instances'][outputs['instances'].scores > confiance]
     outputs_final = outputs_pred[outputs_pred.pred_classes < 7]
 
     rois = outputs_final.pred_boxes.tensor
@@ -663,4 +605,337 @@ def prediction(im, classification_model, detection_model, transformes, device):
     # Remplacement de la classe prédite par la classe de classification
     outputs_final.pred_classes = torch.tensor(pred_classes_final)
     return outputs_final
+
+
+##### GRAD CAM DETECTRON2 ######
+
+
+class GradCAM():
+    """
+    Classe pour implémenter la fonction GradCam avec les hooks Pytorch nécessaires.
+
+    Attributs
+    ----------
+    model : Modèle GeneralizedRCNN de detectron2
+        Un modèle utilisant l'API detectron2 pour l'inférence
+    layer_name : str
+        nom de la couche convolutionnelle pour effectuer GradCAM
+    """
+
+    def __init__(self, model, target_layer_name):
+        self.model = model
+        self.target_layer_name = target_layer_name
+        self.activations = None
+        self.gradient = None
+        self.model.eval()
+        self.activations_grads = []
+        self._register_hook()
+
+    def _get_activations_hook(self, module, input, output):
+        self.activations = output
+
+    def _get_grads_hook(self, module, input_grad, output_grad):
+        self.gradient = output_grad[0]
+
+    def _register_hook(self):
+        for (name, module) in self.model.named_modules():
+            if name == self.target_layer_name:
+                self.activations_grads.append(module.register_forward_hook(self._get_activations_hook))
+                self.activations_grads.append(module.register_backward_hook(self._get_grads_hook))
+                return True
+        print(f"Couche {self.target_layer_name} non trouvée dans le Modèle !")
+
+    def _release_activations_grads(self):
+      for handle in self.activations_grads:
+            handle.remove()
+    
+    def _postprocess_cam(self, raw_cam, img_width, img_height):
+        cam_orig = np.sum(raw_cam, axis=0)  # [H,W]
+        cam_orig = np.maximum(cam_orig, 0)  # ReLU
+        cam_orig -= np.min(cam_orig)
+        cam_orig /= np.max(cam_orig)
+        cam = cv2.resize(cam_orig, (img_width, img_height))
+        return cam, cam_orig
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        self._release_activations_grads()
+
+    def __call__(self, inputs, target_category):
+        """
+        Appelle l'instance GradCAM++
+
+        Paramètres
+        ----------
+        inputs : dict
+            L'entrée dans le format standard d'entrée du modèle detectron2
+            https://detectron2.readthedocs.io/en/latest/tutorials/models.html#model-input-format
+
+        target_category : int, optional
+            L'indice de la catégorie cible. Si `None` la classe avec le score le plus élevé sera sélectionnée
+
+        Retourne
+        -------
+        cam : np.array()
+          Carte d'activation de classe pondérée par le gradient
+        output : list
+          liste d'objets Instance représentant la sortie du modèle detectron2
+        """
+        self.model.zero_grad()
+        output = self.model.forward([inputs])
+
+        if target_category == None:
+          target_category =  np.argmax(output[0]['instances'].scores.cpu().data.numpy(), axis=-1)
+
+        score = output[0]['instances'].scores[target_category]
+        score.backward()
+
+        gradient = self.gradient[0].cpu().data.numpy()  # [C,H,W]
+        activations = self.activations[0].cpu().data.numpy()  # [C,H,W]
+        weight = np.mean(gradient, axis=(1, 2))  # [C]
+
+        cam = activations * weight[:, np.newaxis, np.newaxis]  # [C,H,W]
+        cam, cam_orig = self._postprocess_cam(cam, inputs["width"], inputs["height"])
+
+        return cam, cam_orig, output
+
+class GradCamPlusPlus(GradCAM):
+    """
+    Sous-classe pour implémenter la fonction GradCam++ avec ses hooks PyTorch nécessaires.
+    ...
+
+    Attributs
+    ----------
+    model : Modèle GeneralizedRCNN de detectron2
+        Un modèle utilisant l'API detectron2 pour l'inférence
+    target_layer_name : str
+        nom de la couche convolutionnelle pour effectuer GradCAM++ 
+
+    """
+    def __init__(self, model, target_layer_name):
+        super(GradCamPlusPlus, self).__init__(model, target_layer_name)
+
+    def __call__(self, inputs, target_category):
+        """
+        Appelle l'instance GradCAM++
+
+        Paramètres
+        ----------
+        inputs : dict
+            L'entrée dans le format standard d'entrée du modèle detectron2
+            https://detectron2.readthedocs.io/en/latest/tutorials/models.html#model-input-format
+
+        target_category : int, optional
+            L'indice de la catégorie cible. Si `None` la classe avec le score le plus élevé sera sélectionnée
+
+        Retourne
+        -------
+        cam : np.array()
+          Carte d'activation de classe pondérée par le gradient
+        output : list
+          liste d'objets Instance représentant la sortie du modèle detectron2
+        """
+        self.model.zero_grad()
+        output = self.model.forward([inputs])
+
+        if target_category == None:
+          target_category =  np.argmax(output[0]['instances'].scores.cpu().data.numpy(), axis=-1)
+
+        score = output[0]['instances'].scores[target_category]
+        score.backward()
+
+        gradient = self.gradient[0].cpu().data.numpy()  # [C,H,W]
+        activations = self.activations[0].cpu().data.numpy()  # [C,H,W]
+
+        # de https://github.com/jacobgil/pytorch-grad-cam/blob/master/pytorch_grad_cam/grad_cam_plusplus.py
+        grads_power_2 = gradient**2
+        grads_power_3 = grads_power_2 * gradient
+        # Equation 19 dans https://arxiv.org/abs/1710.11063
+        sum_activations = np.sum(activations, axis=(1, 2))
+        eps = 0.000001
+        aij = grads_power_2 / (2 * grads_power_2 +
+                               sum_activations[:, None, None] * grads_power_3 + eps)
+        # Maintenant, ramenez le ReLU de l'eq.7 dans le document,
+        # Et mettez à zéro les aij où les activations sont 0
+        aij = np.where(gradient != 0, aij, 0)
+
+        weights = np.maximum(gradient, 0) * aij
+        weight = np.sum(weights, axis=(1, 2))
+
+        cam = activations * weight[:, np.newaxis, np.newaxis]  # [C,H,W]
+        cam, cam_orig = self._postprocess_cam(cam, inputs["width"], inputs["height"])
+
+        return cam, cam_orig, output
+    
+class Detectron2GradCAM():
+  """
+      Attributs
+    ----------
+    cfg : ConfNd
+        configuration du modèle detectron2
+    model_file : str
+        chemin du fichier de modèle detectron2
+    """
+  def __init__(self, cfg):
+      self.cfg = cfg
+
+  def _get_input_dict(self, original_image):
+      # Obtient un dictionnaire d'entrée à partir d'une image originale
+      height, width = original_image.shape[:2]
+      # Génère la transformation de l'image
+      transform_gen = T.ResizeShortestEdge(
+          [self.cfg.INPUT.MIN_SIZE_TEST, self.cfg.INPUT.MIN_SIZE_TEST], self.cfg.INPUT.MAX_SIZE_TEST
+      )
+      image = transform_gen.get_transform(original_image).apply_image(original_image)
+      image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1)).requires_grad_(True)
+      inputs = {"image": image, "height": height, "width": width}
+      return inputs
+
+  def get_cam(self, img, target_instance, layer_name, grad_cam_type="GradCAM"):
+      """
+      Appelle l'instance GradCAM++
+
+      Paramètres
+      ----------
+      img : str
+          Chemin vers l'image d'inférence
+      target_instance : int
+          L'index de l'instance cible
+      layer_name : str
+          Couche de convolution pour effectuer GradCAM sur
+      grad_cam_type : str
+          GradCAM ou GradCAM++ (pour plusieurs instances du même objet, GradCAM++ peut être préférable)
+
+      Retourne
+      -------
+      image_dict : dict
+        {"image" : <image>, "cam" : <cam>, "output" : <output>, "label" : <label>}
+        <image> image d'entrée originale
+        <cam> carte d'activation de classe redimensionnée à la forme de l'image originale
+        <output> objet instances généré par le modèle
+        <label> étiquette de l'instance
+      cam_orig : numpy.ndarray
+        cam brut non traité
+      """
+      model = build_model(self.cfg)
+      checkpointer = DetectionCheckpointer(model)
+      checkpointer.load(self.cfg.MODEL.WEIGHTS)
+
+      image = read_image(img, format="BGR")
+      input_image_dict = self._get_input_dict(image)
+
+      # Choisissez le type de Grad CAM à utiliser
+      if grad_cam_type == "GradCAM":
+        grad_cam = GradCAM(model, layer_name)
+
+      elif grad_cam_type == "GradCAM++":
+        grad_cam = GradCamPlusPlus(model, layer_name)
+      
+      else:
+        raise ValueError('Type de Grad CAM non spécifié')
+
+      with grad_cam as cam:
+        cam, cam_orig, output = cam(input_image_dict, target_category=target_instance)
+
+      image_dict = {}
+      image_dict["image"] = image
+      image_dict["cam"] = cam
+      image_dict["output"] = output
+
+      return image_dict, cam_orig
+
+
+
+##### GRAD CAM DETECTION ######
+
+
+class FeatureExtractor():
+    """ Class for extracting activations and
+    registering gradients from targetted intermediate layers """
+    def __init__(self, model, target_layers):
+        self.model = model
+        self.target_layers = target_layers
+        self.gradients = []
+
+    def save_gradient(self, grad):
+        self.gradients.append(grad)
+
+    def __call__(self, x):
+        self.gradients = []
+        outputs = []
+        for name, module in self.model._modules.items():
+            if name == 'fc':
+                x = x.view(x.size(0), -1)
+            x = module(x)
+            if name in self.target_layers:
+                x.register_hook(self.save_gradient)
+                outputs += [x]
+        return outputs, x
+
+
+
+class ModelOutputs():
+    """ Class for making a forward pass, and getting:
+    1. The network output.
+    2. Activations from intermediate targetted layers.
+    3. Gradients from intermediate targetted layers. """
+    def __init__(self, model, target_layers):
+        self.model = model
+        self.feature_extractor = FeatureExtractor(self.model, target_layers)
+
+    def get_gradients(self):
+        return self.feature_extractor.gradients
+
+    def __call__(self, x):
+        target_activations, output = self.feature_extractor(x)
+        return target_activations, output
+
+
+##### GRAD CAM CLASSIFICATION ######
+
+
+class GradCam_resnet50:
+    def __init__(self, model, target_layer_names):
+        self.model = model
+        self.model.eval()
+
+        self.extractor = ModelOutputs(self.model, target_layer_names)
+
+    def forward(self, input_img):
+        return self.model(input_img)
+
+    def __call__(self, input_img):
+
+        features, output = self.extractor(input_img)
+
+
+        target_category = np.argmax(output.cpu().data.numpy())
+
+        one_hot = np.zeros((1, output.size()[-1]), dtype=np.float32)
+        one_hot[0][target_category] = 1
+        one_hot = torch.from_numpy(one_hot).requires_grad_(True)
+        
+        one_hot = torch.sum(one_hot * output)
+
+        self.model.zero_grad()
+        one_hot.backward(retain_graph=True)
+
+        grads_val = self.extractor.get_gradients()[-1].cpu().data.numpy()
+
+        target = features[-1]
+        target = target.cpu().data.numpy()[0, :]
+
+        weights = np.mean(grads_val, axis=(2, 3))[0, :]
+        cam = np.zeros(target.shape[1:], dtype=np.float32)
+
+        for i, w in enumerate(weights):
+            cam += w * target[i, :, :]
+
+        cam = np.maximum(cam, 0)
+        cam = cv2.resize(cam, input_img.shape[2:])
+        cam = cam - np.min(cam)
+        cam = cam / np.max(cam)
+        return cam
 
