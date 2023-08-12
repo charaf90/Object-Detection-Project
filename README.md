@@ -1,5 +1,7 @@
 # Projet de détection et de classification de véhicules à partir d'images aériennes 
 
+![Python](https://img.shields.io/badge/Python-3.9.17-blue)
+
 ## Description
 
 Ce projet consiste à mettre en place un système de détection et de classification de véhicules à partir d'images aériennes. Il utilise deux modèles imbriqués, à savoir Detectron2 pour la détection et ResNet50 pour la classification. Le dataset utilisé dans ce projet est le VAID (Vehicle Aerial Imagery Dataset), qui a été préalablement nettoyé et préparé.
