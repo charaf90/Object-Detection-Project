@@ -55,8 +55,8 @@ Projet
 │ │ ├── anns
 │ │ └── imgs
 │ └── val
-│ │ ├── anns
-│ └─└── imgs
+│   ├── anns
+│   └── imgs
 ├── bbox_imgs                                 #Véhicules extraits
 ├── labels.csv                                #Classe de chaque véhicule
 └── output
